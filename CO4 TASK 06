@@ -1,0 +1,118 @@
+#include <stdio.h>
+#include <string.h>
+
+#define MAX_ITEMS 20
+
+typedef struct {
+    int day, month, year;
+} Date;
+
+typedef struct {
+    int hour, minute;
+} TimeOfDay;
+
+typedef enum {
+    ITEM_PACKAGED,
+    ITEM_COOKED,
+    ITEM_COMBO
+} ItemCategory;
+
+typedef struct {
+    int id;
+    char name[30];
+    float price;
+    int stock;
+    int units_sold;
+    ItemCategory category;
+    union {
+        Date expiry;              /* For ITEM_PACKAGED */
+        TimeOfDay prep_time;      /* For ITEM_COOKED */
+        struct {
+            int sub_ids[3];
+            int sub_count;
+        } combo;                  /* For ITEM_COMBO */
+    } details;
+} CanteenItem;
+
+static long date_to_days(Date d) {
+    return (long)d.year * 365L + (long)d.month * 30L + (long)d.day;
+}
+
+void check_expiring_items(const CanteenItem items[], int n, Date today) {
+    long today_days = date_to_days(today);
+    printf("=== Expiry Warnings (within 2 days of %02d/%02d/%04d) ===\n",
+           today.day, today.month, today.year);
+    for (int i = 0; i < n; i++) {
+        if (items[i].category == ITEM_PACKAGED) {
+            long diff = date_to_days(items[i].details.expiry) - today_days;
+            if (diff >= 0 && diff <= 2) {
+                printf("  WARNING: '%s' (ID %d) expires in %ld day(s) on %02d/%02d/%04d!\n",
+                       items[i].name, items[i].id, diff,
+                       items[i].details.expiry.day,
+                       items[i].details.expiry.month,
+                       items[i].details.expiry.year);
+            }
+        }
+    }
+}
+
+int record_sale(CanteenItem *item, int qty) {
+    if (item == NULL || qty <= 0) return 0;
+    if (qty > item->stock) {
+        printf("  SALE REJECTED: Requested %d of '%s', only %d in stock.\n",
+               qty, item->name, item->stock);
+        return 0;
+    }
+    item->stock -= qty;
+    item->units_sold += qty;
+    printf("  SOLD: %d x '%s' = Rs %.2f (Remaining stock: %d)\n",
+           qty, item->name, qty * item->price, item->stock);
+    return 1;
+}
+
+void print_revenue_summary(CanteenItem items[], int n) {
+    /* Sort descending by revenue (price * units_sold) */
+    for (int i = 0; i < n - 1; i++) {
+        for (int j = 0; j < n - 1 - i; j++) {
+            float rev1 = items[j].price * items[j].units_sold;
+            float rev2 = items[j + 1].price * items[j + 1].units_sold;
+            if (rev2 > rev1) {
+                CanteenItem tmp = items[j];
+                items[j] = items[j + 1];
+                items[j + 1] = tmp;
+            }
+        }
+    }
+
+    printf("\n=== Daily Bill Summary (Sorted by Revenue) ===\n");
+    float grand_total = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float rev = items[i].price * items[i].units_sold;
+        grand_total += rev;
+        printf("  %-18s | Sold: %2d | Stock: %2d | Revenue: Rs %7.2f\n",
+               items[i].name, items[i].units_sold, items[i].stock, rev);
+    }
+    printf("Total Canteen Revenue: Rs %.2f\n", grand_total);
+}
+
+int main(void) {
+    Date today = {12, 10, 2026};
+
+    CanteenItem menu[4] = {
+        {101, "Paneer Wrap",   60.0f, 15, 0, ITEM_COOKED,   .details.prep_time = {8, 30}},
+        {102, "Mango Juice",   30.0f, 20, 0, ITEM_PACKAGED, .details.expiry = {13, 10, 2026}},
+        {103, "Biscuit Pack",  20.0f, 10, 0, ITEM_PACKAGED, .details.expiry = {25, 12, 2026}},
+        {104, "Lunch Combo",   85.0f,  5, 0, ITEM_COMBO,    .details.combo = {{101, 102, 0}, 2}}
+    };
+
+    check_expiring_items(menu, 4, today);
+
+    printf("\n=== Recording Sales ===\n");
+    record_sale(&menu[0], 6);   /* Normal sale */
+    record_sale(&menu[1], 10);  /* Normal sale */
+    record_sale(&menu[3], 4);   /* Normal combo sale */
+    record_sale(&menu[3], 3);   /* Exceeds remaining stock (only 1 left) */
+
+    print_revenue_summary(menu, 4);
+    return 0;
+}
