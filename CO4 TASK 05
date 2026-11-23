@@ -1,0 +1,51 @@
+#include <stdio.h>
+
+/* Global variable (accessible across translation units via 'extern int g_token;') */
+int g_token = 1000;
+
+/* TODO 1: Static local variable retains state across function calls */
+int next_token(void) {
+    static int token = 1000;
+    return ++token;
+}
+
+/* Automatic local variable re-initializes to 1000 on every call */
+int auto_token(void) {
+    auto int token = 1000;
+    return ++token;
+}
+
+/* Global counter version */
+int global_token(void) {
+    extern int g_token;
+    return ++g_token;
+}
+
+/* Task 5.2: Independent Veg and Non-Veg counters */
+int next_veg_token(void) {
+    static int veg = 1000;
+    return ++veg;
+}
+
+int next_nonveg_token(void) {
+    static int nonveg = 2000;
+    return ++nonveg;
+}
+
+int main(void) {
+    int s1 = next_token(), s2 = next_token(), s3 = next_token();
+    int a1 = auto_token(), a2 = auto_token(), a3 = auto_token();
+
+    printf("static: %d %d %d\n", s1, s2, s3);
+    printf("auto:   %d %d %d\n", a1, a2, a3);
+
+    printf("global (using register loop var): ");
+    for (register int i = 0; i < 3; i++) {
+        printf("%d ", global_token());
+    }
+    printf("\n");
+
+    printf("veg:    %d %d\n", next_veg_token(), next_veg_token());
+    printf("nonveg: %d %d\n", next_nonveg_token(), next_nonveg_token());
+    return 0;
+}
